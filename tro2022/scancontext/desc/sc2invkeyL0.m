@@ -1,0 +1,13 @@
+function [ ring_key ] = sc2invkeyL0(sc)
+
+num_rings = size(sc, 1);
+
+ring_key = zeros(1, num_rings);
+for ith=1:num_rings
+    ith_ring = sc(ith,:);
+%     ring_key(ith) = mean(ith_ring);
+    ring_key(ith) = nnz(ith_ring);
+end
+
+end
+
