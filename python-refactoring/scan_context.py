@@ -6,20 +6,17 @@ def timing(func):
     def wrapper(*args, **kwargs):
         start = time.time()
         result = func(*args, **kwargs)
-        elapsed = (time.time() - start) * 1000.0  # ms 단위
+        elapsed = (time.time() - start) * 1000.0  # ms
         print(f"* [Timing] {func.__name__} took {elapsed:.4f} ms")
         return result
     return wrapper
-
 
 def xy2theta(x, y):
     angle = np.degrees(np.arctan2(y, x))
     return angle % 360
 
-
 def circshift(mat, num_shift):
     return np.roll(mat, shift=num_shift, axis=1)
-
 
 def dist_direct_sc(sc1, sc2):
     valid_cols = np.logical_and(np.linalg.norm(sc1, axis=0) > 0, np.linalg.norm(sc2, axis=0) > 0)
@@ -40,14 +37,18 @@ class ScanContext:
         self.unit_sector_angle = 360.0 / self.num_sector
         self.pc_unit_ringgap = self.max_radius / self.num_ring
 
+        # Descriptor 저장소
         self.descs = []
         self.ring_keys = []
         self.sector_keys = []
         self.inv_key_mat = []
+        self.timestamps = []  # <<<<<< 추가됨
+
+        # KDTree
         self.kdtree = None
 
+        # 하이퍼파라미터
         self.sample_step = 50
-
         self.exclude_recent = 50
         self.num_candidates = 3
         self.search_ratio = 0.1
@@ -60,7 +61,6 @@ class ScanContext:
         NO_POINT = -1000.0
         desc = NO_POINT * np.ones((self.num_ring, self.num_sector))
 
-        # 스킵샘플링 적용
         for i in range(0, pointcloud.shape[0], sample_step):
             x, y, z = pointcloud[i]
             z += self.lidar_height
@@ -112,7 +112,7 @@ class ScanContext:
                 best_shift = shift
         return best_dist, best_shift
 
-    def add_descriptor(self, pointcloud):
+    def add_descriptor(self, pointcloud, timestamp=None):
         desc = self.make_descriptor(pointcloud, self.sample_step)
         ring_key = self.make_ring_key(desc)
         sector_key = self.make_sector_key(desc)
@@ -121,6 +121,11 @@ class ScanContext:
         self.ring_keys.append(ring_key)
         self.sector_keys.append(sector_key)
         self.inv_key_mat.append(ring_key.flatten())
+
+        if timestamp is not None:
+            self.timestamps.append(timestamp)
+        else:
+            self.timestamps.append(-1.0)
 
     @timing
     def build_tree(self):
@@ -133,7 +138,7 @@ class ScanContext:
     def find_nearest(self):
         if len(self.inv_key_mat) < self.exclude_recent + 1:
             return -1, 0.0, float('inf')
-            
+
         if self.tree_counter % self.tree_period == 0:
             self.build_tree()
         self.tree_counter += 1
